@@ -4,12 +4,8 @@ Optimized for large datasets to avoid the memory overhead of converting beforeha
 """
 from pathlib import Path
 import os
-import yaml
-import glob
 from PIL import Image
-import numpy as np
 from collections import defaultdict
-import supervision as sv
 from supervision.utils.file import read_yaml_file, read_txt_file, list_files_with_extensions
 
 import torch
