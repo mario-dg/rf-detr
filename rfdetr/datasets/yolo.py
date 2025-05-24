@@ -2,8 +2,9 @@
 YOLO dataset loader.
 Optimized for large datasets to avoid the memory overhead of converting beforehand.
 """
+import argparse
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 from PIL import Image
 from collections import defaultdict
 from supervision.utils.file import read_yaml_file, read_txt_file, list_files_with_extensions
@@ -53,50 +54,35 @@ def is_valid_yolo_dataset(dataset_dir: Union[str, Path]) -> bool:
     return True
 
 
-def build_yolo(image_set, args, resolution):
+def build_yolo(image_set: str, args: argparse.Namespace, resolution: int) -> 'YOLODataset':
     """Build YOLO dataset"""
     root = Path(args.dataset_dir)
-    print(image_set)
-    PATHS = {
+    data_yaml_path = root / REQUIRED_YOLO_YAML_FILE
+    split_paths = {
         "train": (root / "train" / "images", root / "train" / "labels"),
         "val": (root / "valid" / "images", root / "valid" / "labels"),
         "test": (root / "test" / "images", root / "test" / "labels"),
     }
-    
-    img_folder, labels_folder = PATHS[image_set.split("_")[0]]
-    data_yaml_path = root / REQUIRED_YOLO_YAML_FILE
+    images_directory_path, annotations_directory_path = split_paths.get(image_set)
     
     try:
         square_resize_div_64 = args.square_resize_div_64
-    except:
-        square_resize_div_64 = False
-    
-    if square_resize_div_64:
-        dataset = YOLODataset(
-            img_folder, 
-            labels_folder,
-            data_yaml_path,
-            transforms=make_coco_transforms_square_div_64(
-                image_set, 
-                resolution, 
-                multi_scale=args.multi_scale, 
-                expanded_scales=args.expanded_scales
-            )
-        )
+    except AttributeError:  # `square_resize_div_64` not set in args
+        transforms_sink = make_coco_transforms
     else:
-        dataset = YOLODataset(
-            img_folder, 
-            labels_folder,
-            data_yaml_path,
-            transforms=make_coco_transforms(
-                image_set, 
-                resolution, 
-                multi_scale=args.multi_scale, 
-                expanded_scales=args.expanded_scales
-            )
-        )
+        transforms_sink = make_coco_transforms_square_div_64
     
-    return dataset 
+    return YOLODataset(
+        images_directory_path=images_directory_path, 
+        annotations_directory_path=annotations_directory_path,
+        data_yaml_path=data_yaml_path,
+        transforms=transforms_sink(
+            image_set, 
+            resolution, 
+            multi_scale=args.multi_scale, 
+            expanded_scales=args.expanded_scales
+        )
+    )
 
 
 def parse_yolo_annotations(lines: list[str], resolution_wh: tuple[int, int], class_names: list[str]) -> tuple[list, list]:
@@ -185,7 +171,7 @@ def match_image_label_pairs(image_paths: List[Path], label_paths: List[Path]) ->
 
 class YOLODataset(torch.utils.data.Dataset):
     """Dataset for YOLO format annotations"""
-    def __init__(self, images_directory_path: str, annotations_directory_path: str, data_yaml_path: str, transforms=None):
+    def __init__(self, images_directory_path: str, annotations_directory_path: str, data_yaml_path: str, transforms: Optional[Callable] = None):
         super(YOLODataset, self).__init__()
         self.images_directory_path = images_directory_path
         self.annotations_directory_path = annotations_directory_path
