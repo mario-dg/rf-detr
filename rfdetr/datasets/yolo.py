@@ -3,7 +3,7 @@ YOLO dataset loader.
 Optimized for large datasets to avoid the memory overhead of converting beforehand.
 """
 from pathlib import Path
-import os
+from typing import List, Tuple, Union
 from PIL import Image
 from collections import defaultdict
 from supervision.utils.file import read_yaml_file, read_txt_file, list_files_with_extensions
@@ -18,7 +18,7 @@ REQUIRED_SPLIT_DIRS = ["train", "valid"]
 REQUIRED_DATA_SUBDIRS = ["images", "labels"]
 
 
-def is_valid_yolo_dataset(dataset_dir: str) -> bool:
+def is_valid_yolo_dataset(dataset_dir: Union[str, Path]) -> bool:
     """
     Checks if the specified dataset directory is in yolo format.
 
@@ -29,16 +29,28 @@ def is_valid_yolo_dataset(dataset_dir: str) -> bool:
 
     Returns a boolean indicating whether the dataset is in correct yolo format.
     """
-    contains_required_data_yaml = os.path.exists(os.path.join(dataset_dir, REQUIRED_YOLO_YAML_FILE))
-    contains_required_split_dirs = all(
-        os.path.exists(os.path.join(dataset_dir, split_dir)) for split_dir in REQUIRED_SPLIT_DIRS
-    )
-    contains_required_data_subdirs = all(
-        os.path.exists(os.path.join(dataset_dir, split_dir, data_subdir))
-        for split_dir in REQUIRED_SPLIT_DIRS
-        for data_subdir in REQUIRED_DATA_SUBDIRS
-    )
-    return contains_required_data_yaml and contains_required_split_dirs and contains_required_data_subdirs
+    if isinstance(dataset_dir, str):
+        dataset_dir = Path(dataset_dir)
+    
+    data_yaml_path = dataset_dir / REQUIRED_YOLO_YAML_FILE
+    contains_required_data_yaml = data_yaml_path.exists()
+    if not contains_required_data_yaml:
+        print(f"Missing {REQUIRED_YOLO_YAML_FILE} in {dataset_dir}")
+        return False
+
+    for split_dir in REQUIRED_SPLIT_DIRS:
+        split_dir_path = dataset_dir / split_dir
+        if not split_dir_path.exists():
+            print(f"Missing {split_dir} directory in {dataset_dir}")
+            return False
+
+        for data_subdir in REQUIRED_DATA_SUBDIRS:
+            data_subdir_path = split_dir_path / data_subdir
+            if not data_subdir_path.exists():
+                print(f"Missing {data_subdir} directory in {split_dir_path}")
+                return False
+
+    return True
 
 
 def build_yolo(image_set, args, resolution):
@@ -116,7 +128,7 @@ def parse_yolo_annotations(lines: list[str], resolution_wh: tuple[int, int], cla
     return boxes, labels
 
 
-def match_image_label_pairs(image_paths, label_paths):
+def match_image_label_pairs(image_paths: List[Path], label_paths: List[Path]) -> Tuple[List[Path], List[Path]]:
     """
     Matches image paths with their corresponding label paths.
     
@@ -130,7 +142,7 @@ def match_image_label_pairs(image_paths, label_paths):
     label_dict = {}
     label_basenames = set()
     for label_path in label_paths:
-        base_name = os.path.splitext(os.path.basename(label_path))[0]
+        base_name = label_path.stem
         label_dict[base_name] = label_path
         label_basenames.add(base_name)
     
@@ -141,12 +153,12 @@ def match_image_label_pairs(image_paths, label_paths):
     
     matched_pairs = []
     for image_path in image_paths:
-        base_name = os.path.splitext(os.path.basename(image_path))[0]
+        base_name = image_path.stem
         if base_name in label_dict:
             matched_pairs.append((image_path, label_dict[base_name]))
             unused_labels.discard(base_name)
         else:
-            skipped_images.append(os.path.basename(image_path))
+            skipped_images.append(image_path.name)
     
     matched_pairs.sort(key=lambda x: x[0])
     
@@ -295,7 +307,7 @@ class CocoLikeAPI:
             width, height = img.size
             imgs.append({
                 'id': self.orig_dataset.ids[idx],  
-                'file_name': os.path.basename(img_path),
+                'file_name': img_path.name,
                 'width': width,
                 'height': height
             })
