@@ -21,14 +21,18 @@ REQUIRED_DATA_SUBDIRS = ["images", "labels"]
 
 def is_valid_yolo_dataset(dataset_dir: Union[str, Path]) -> bool:
     """
-    Checks if the specified dataset directory is in yolo format.
+    Check if the specified directory follows the YOLO dataset format.
 
-    We accept a dataset to be in yolo format if the following conditions are met:
-    - The dataset_dir contains a data.yaml file
-    - The dataset_dir contains "train" and "valid" subdirectories, each containing "images" and "labels" subdirectories
-    - The "test" subdirectory is optional
+    A valid YOLO dataset directory must satisfy the following:
+      - Contains a 'data.yaml' file at the root.
+      - Contains 'train' and 'valid' subdirectories, each with 'images' and 'labels' subdirectories.
+      - The 'test' subdirectory is optional and not required for validation.
 
-    Returns a boolean indicating whether the dataset is in correct yolo format.
+    Args:
+        dataset_dir (Union[str, Path]): Path to the root directory of the dataset.
+
+    Returns:
+        bool: True if the directory structure matches the expected YOLO format, False otherwise.
     """
     if isinstance(dataset_dir, str):
         dataset_dir = Path(dataset_dir)
@@ -55,7 +59,18 @@ def is_valid_yolo_dataset(dataset_dir: Union[str, Path]) -> bool:
 
 
 def build_yolo(image_set: str, args: argparse.Namespace, resolution: int) -> 'YOLODataset':
-    """Build YOLO dataset"""
+    """
+    Builds and returns a YOLODataset instance for the specified image set.
+    
+    Args:
+        image_set (str): The dataset split to use. Must be one of "train", "val", or "test".
+        args (argparse.Namespace): Parsed command-line arguments containing dataset configuration.
+        resolution (int): Target image resolution for transformations.
+    Returns:
+        YOLODataset: Configured dataset instance for the specified split.
+    Raises:
+        KeyError: If `image_set` is not one of the expected values.
+    """
     root = Path(args.dataset_dir)
     data_yaml_path = root / REQUIRED_YOLO_YAML_FILE
     split_paths = {
