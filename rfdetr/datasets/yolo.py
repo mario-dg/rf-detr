@@ -164,48 +164,53 @@ def match_image_label_pairs(image_paths: List[Path], label_paths: List[Path]) ->
     Returns:
         Tuple of (matched_image_paths, matched_label_paths) with paired files in sorted order
     """
-    label_dict = {}
-    label_basenames = set()
-    for label_path in label_paths:
-        base_name = label_path.stem
-        label_dict[base_name] = label_path
-        label_basenames.add(base_name)
+
+    # Check if the image list is empty
+    len_image_paths = len(image_paths)
+    if len_image_paths == 0:
+        print("No images found, returning empty lists.")
+        return [], []
     
-    image_count = len(image_paths)
-    label_count = len(label_paths)
-    skipped_images = []
-    unused_labels = set(label_basenames)
+    # Check if the label list is empty
+    len_label_paths = len(label_paths)
+    if len_label_paths == 0:
+        print("No labels found, returning empty lists.")
+        return [], []
     
-    matched_pairs = []
-    for image_path in image_paths:
-        base_name = image_path.stem
-        if base_name in label_dict:
-            matched_pairs.append((image_path, label_dict[base_name]))
-            unused_labels.discard(base_name)
+    # Check if the number of images and labels match
+    if len_image_paths != len_label_paths:
+        print(f"Warning: Found {len_image_paths} images and {len_label_paths} labels. Matching will be performed based on file names.")
+
+    # Determine equal stems between images and labels
+    image_stems = {path.stem: path for path in image_paths}
+    label_stems = {path.stem: path for path in label_paths}
+    common_stems = set(image_stems.keys()) & set(label_stems.keys())
+    len_common_stems = len(common_stems)
+
+    # Check if there are more images than labels
+    if len_common_stems != len_image_paths:
+        unmatched_image_stems = set(image_stems.keys()) - common_stems
+        print(f"Warning: Found {len(unmatched_image_stems)} images without matching labels")
+        if len(unmatched_image_stems) <= 10:
+            print(f"  Unmatched images: {', '.join(unmatched_image_stems)}")
         else:
-            skipped_images.append(image_path.name)
+            print(f"  First 10 unmatched images: {', '.join(list(unmatched_image_stems)[:10])}...")
     
-    matched_pairs.sort(key=lambda x: x[0])
-    
-    matched_image_paths, matched_label_paths = zip(*matched_pairs) if matched_pairs else ([], [])
-    
-    if skipped_images:
-        print(f"WARNING: Skipped {len(skipped_images)} images without matching labels")
-        if len(skipped_images) <= 10:
-            print(f"  Skipped images: {', '.join(skipped_images)}")
+    # Check if there are more labels than images
+    if len_common_stems != len_label_paths:
+        unmatched_label_stems = set(label_stems.keys()) - common_stems
+        print(f"Warning: Found {len(unmatched_label_stems)} labels without matching images")
+        if len(unmatched_label_stems) <= 10:
+            print(f"  Unmatched labels: {', '.join(unmatched_label_stems)}")
         else:
-            print(f"  First 10 skipped images: {', '.join(skipped_images[:10])}...")
+            print(f"  First 10 unmatched labels: {', '.join(list(unmatched_label_stems)[:10])}...")
+
+    # Sort the common stems and create matched paths
+    sorted_common_stems = sorted(common_stems)
+    matched_image_paths = [image_stems[stem] for stem in sorted_common_stems]
+    matched_label_paths = [label_stems[stem] for stem in sorted_common_stems]
     
-    if unused_labels:
-        print(f"WARNING: Found {len(unused_labels)} label files without matching images")
-        if len(unused_labels) <= 10:
-            print(f"  Unused labels: {', '.join(unused_labels)}")
-        else:
-            print(f"  First 10 unused labels: {', '.join(list(unused_labels)[:10])}...")
-    
-    print(f"Matching complete: {len(matched_pairs)}/{image_count} images matched with labels ({len(matched_pairs)}/{label_count} labels used)")
-    
-    return list(matched_image_paths), list(matched_label_paths)
+    return matched_image_paths, matched_label_paths
 
 
 class YOLODataset(torch.utils.data.Dataset):
