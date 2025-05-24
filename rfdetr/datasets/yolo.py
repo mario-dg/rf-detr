@@ -100,33 +100,57 @@ def build_yolo(image_set: str, args: argparse.Namespace, resolution: int) -> 'YO
     )
 
 
-def parse_yolo_annotations(lines: list[str], resolution_wh: tuple[int, int], class_names: list[str]) -> tuple[list, list]:
-    boxes = []
-    labels = []
-    for line in lines:
-        data = line.strip().split()
-        if len(data) == 5: 
-            class_id = int(data[0])
-            
-            if class_id < 0 or class_id >= len(class_names):
-                print(f"Warning: Skipping invalid class ID {class_id}")
-                continue
-                
-            x_center, y_center, width, height = map(float, data[1:5])
-            
-            if not all(0 <= v <= 1 for v in [x_center, y_center, width, height]):
-                print(f"Warning: Skipping invalid coordinates {x_center}, {y_center}, {width}, {height}. (Not normalized)")
-                continue
-            
-            x1 = (x_center - width / 2) * resolution_wh[0]
-            y1 = (y_center - height / 2) * resolution_wh[1]
-            x2 = (x_center + width / 2) * resolution_wh[0]
-            y2 = (y_center + height / 2) * resolution_wh[1]
-            
-            boxes.append([x1, y1, x2, y2])
-            labels.append(class_id)
+def parse_yolo_annotations(lines: List[str], resolution_wh: Tuple[int, int], class_names: List[str]) -> Tuple[List[int], List[float]]:
+    """
+    Parses YOLO annotation lines and converts them into class labels and bounding box coordinates.
     
-    return boxes, labels
+    Each annotation line is expected to be in the YOLO format:
+    <class_id> <x_center> <y_center> <width> <height>
+    where all coordinates are normalized (between 0 and 1).
+
+    Args:
+        lines (List[str]): List of annotation lines in YOLO format.
+        resolution_wh (Tuple[int, int]): Image resolution as (width, height).
+        class_names (List[str]): List of valid class names.
+    Returns:
+        Tuple[List[int], List[float]]: 
+            - List of valid class IDs.
+            - List of bounding boxes in [x1, y1, x2, y2] format (pixel coordinates).
+    Warns:
+        Prints warnings and skips lines with invalid format, class IDs, or coordinates.
+    """
+    len_class_names = len(class_names)
+
+    labels, boxes = [], []
+    for line in lines:
+        line_parts = line.strip().split()
+        
+        # Skip lines with invalid format:
+        if len(line_parts) != 5:
+            print(f"Warning: Skipping invalid line format: {line.strip()}")
+            continue
+
+        # Check class ID:
+        class_id = int(line_parts[0])
+        if class_id < 0 or class_id >= len_class_names:
+            print(f"Warning: Skipping invalid class ID {class_id}")
+            continue
+            
+        # Check coordinates:
+        x_center, y_center, width, height = map(float, line_parts[1:5])
+        if not all(0 <= v <= 1 for v in [x_center, y_center, width, height]):
+            print(f"Warning: Skipping invalid coordinates {x_center}, {y_center}, {width}, {height}. (Not normalized)")
+            continue
+        
+        labels.append(class_id)
+
+        x1 = (x_center - width / 2) * resolution_wh[0]
+        y1 = (y_center - height / 2) * resolution_wh[1]
+        x2 = (x_center + width / 2) * resolution_wh[0]
+        y2 = (y_center + height / 2) * resolution_wh[1]
+        boxes.append([x1, y1, x2, y2])
+    
+    return labels, boxes
 
 
 def match_image_label_pairs(image_paths: List[Path], label_paths: List[Path]) -> Tuple[List[Path], List[Path]]:
@@ -235,7 +259,7 @@ class YOLODataset(torch.utils.data.Dataset):
         target["size"] = torch.as_tensor([int(h), int(w)])
         
         label_lines = read_txt_file(label_path)
-        boxes, labels = parse_yolo_annotations(label_lines, (w, h), self.class_names)
+        labels, boxes = parse_yolo_annotations(label_lines, (w, h), self.class_names)
         
         if len(boxes) > 0:
             boxes = torch.as_tensor(boxes, dtype=torch.float32)
