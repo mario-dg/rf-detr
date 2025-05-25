@@ -14,7 +14,7 @@ RF-DETR is a real-time, transformer-based object detection model architecture de
 
 RF-DETR is the first real-time model to exceed 60 AP on the [Microsoft COCO benchmark](https://cocodataset.org/#home) alongside competitive performance at base sizes. It also achieves state-of-the-art performance on [RF100-VL](https://github.com/roboflow/rf100-vl), an object detection benchmark that measures model domain adaptability to real world problems. RF-DETR is comparable speed to current real-time objection models.
 
-**RF-DETR is small enough to run on the edge, making it an ideal model for deployments that need both strong accuracy and real-time performance.**
+**RF-DETR is small enough to run on the edge using [Inference], making it an ideal model for deployments that need both strong accuracy and real-time performance.**
 
 ## Results
 
@@ -51,6 +51,7 @@ We validated the performance of RF-DETR on both Microsoft COCO and the RF100-VL 
 
 - `2025/03/20`: We release RF-DETR real-time object detection model. **Code and checkpoint for RF-DETR-large and RF-DETR-base are available.**
 - `2025/04/03`: We release early stopping, gradient checkpointing, metrics saving, training resume, TensorBoard and W&B logging support.
+- `2025/05/16`: We release an 'optimize_for_inference' method which speeds up native PyTorch by up to 2x, depending on platform.
 
 ## Installation
 
@@ -76,7 +77,53 @@ pip install git+https://github.com/roboflow/rf-detr.git
 
 ## Inference
 
-The `.predict()` method accepts various input formats, including file paths, PIL images, NumPy arrays, and torch tensors. Please ensure inputs use RGB channel order. For `torch.Tensor` inputs specifically, they must have a shape of `(3, H, W)` with values normalized to the `[0..1)` range.
+The easiest path to deployment is using Roboflow's [Inference](https://github.com/roboflow/inference) package. You can use model's uploaded to Roboflow's platform with Inference's `infer` method:
+
+```python
+import os
+import supervision as sv
+from inference import get_model
+from PIL import Image
+from io import BytesIO
+import requests
+
+url = "https://media.roboflow.com/dog.jpeg"
+image = Image.open(io.BytesIO(requests.get(url).content))
+
+model = get_model("rfdetr-base")
+
+predictions = model.infer(image, confidence=0.5)[0]
+
+detections = sv.Detections.from_inference(predictions)
+
+labels = [prediction.class_name for prediction in predictions.predictions]
+
+annotated_image = image.copy()
+annotated_image = sv.BoxAnnotator().annotate(annotated_image, detections)
+annotated_image = sv.LabelAnnotator().annotate(annotated_image, detections, labels)
+
+sv.plot_image(annotated_image)
+
+annotated_image.save("annotated_image_base.jpg")
+
+model = get_model("rfdetr-large")
+
+predictions = model.infer(image, confidence=0.5)[0]
+
+detections = sv.Detections.from_inference(predictions)
+
+labels = [prediction.class_name for prediction in predictions.predictions]
+
+annotated_image = image.copy()
+annotated_image = sv.BoxAnnotator().annotate(annotated_image, detections)
+annotated_image = sv.LabelAnnotator().annotate(annotated_image, detections, labels)
+
+sv.plot_image(annotated_image)
+```
+
+## Predict
+
+You can also use the .predict method to perform inference during local development. The `.predict()` method accepts various input formats, including file paths, PIL images, NumPy arrays, and torch tensors. Please ensure inputs use RGB channel order. For `torch.Tensor` inputs specifically, they must have a shape of `(3, H, W)` with values normalized to the `[0..1)` range. If you don't plan to modify the image or batch size dynamically at runtime, you can also use `.optimize_for_inference()` to get up to 2x end-to-end speedup, depending on platform.
 
 ```python
 import io
@@ -84,9 +131,11 @@ import requests
 import supervision as sv
 from PIL import Image
 from rfdetr import RFDETRBase
+from rfdetr.util.coco_classes import COCO_CLASSES
 
 model = RFDETRBase()
-CLASS_NAMES = model.class_names
+
+model = model.optimize_for_inference()
 
 url = "https://media.roboflow.com/notebooks/examples/dog-2.jpeg"
 
@@ -94,7 +143,7 @@ image = Image.open(io.BytesIO(requests.get(url).content))
 detections = model.predict(image, threshold=0.5)
 
 labels = [
-    f"{CLASS_NAMES[class_id]} {confidence:.2f}"
+    f"{COCO_CLASSES[class_id]} {confidence:.2f}"
     for class_id, confidence
     in zip(detections.class_id, detections.confidence)
 ]
@@ -114,15 +163,15 @@ sv.plot_image(annotated_image)
 ```python
 import supervision as sv
 from rfdetr import RFDETRBase
+from rfdetr.util.coco_classes import COCO_CLASSES
 
 model = RFDETRBase()
-CLASS_NAMES = model.class_names
 
 def callback(frame, index):
     detections = model.predict(frame[:, :, ::-1], threshold=0.5)
         
     labels = [
-        f"{CLASS_NAMES[class_id]} {confidence:.2f}"
+        f"{COCO_CLASSES[class_id]} {confidence:.2f}"
         for class_id, confidence
         in zip(detections.class_id, detections.confidence)
     ]
@@ -150,9 +199,9 @@ sv.process_video(
 import cv2
 import supervision as sv
 from rfdetr import RFDETRBase
+from rfdetr.util.coco_classes import COCO_CLASSES
 
 model = RFDETRBase()
-CLASS_NAMES = model.class_names
 
 cap = cv2.VideoCapture(0)
 while True:
@@ -163,7 +212,7 @@ while True:
     detections = model.predict(frame[:, :, ::-1], threshold=0.5)
     
     labels = [
-        f"{CLASS_NAMES[class_id]} {confidence:.2f}"
+        f"{COCO_CLASSES[class_id]} {confidence:.2f}"
         for class_id, confidence
         in zip(detections.class_id, detections.confidence)
     ]
@@ -192,9 +241,9 @@ cv2.destroyAllWindows()
 import cv2
 import supervision as sv
 from rfdetr import RFDETRBase
+from rfdetr.util.coco_classes import COCO_CLASSES
 
 model = RFDETRBase()
-CLASS_NAMES = model.class_names
 
 cap = cv2.VideoCapture(<RTSP_STREAM_URL>)
 while True:
@@ -205,7 +254,7 @@ while True:
     detections = model.predict(frame[:, :, ::-1], threshold=0.5)
     
     labels = [
-        f"{CLASS_NAMES[class_id]} {confidence:.2f}"
+        f"{COCO_CLASSES[class_id]} {confidence:.2f}"
         for class_id, confidence
         in zip(detections.class_id, detections.confidence)
     ]
