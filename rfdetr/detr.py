@@ -21,7 +21,7 @@ from PIL import Image
 from rfdetr.config import RFDETRBaseConfig, RFDETRLargeConfig, TrainConfig, ModelConfig
 from rfdetr.main import Model, download_pretrain_weights
 from rfdetr.util.metrics import MetricsPlotSink, MetricsTensorBoardSink, MetricsWandBSink
-from rfdetr.datasets.yolo import is_valid_yolo_dataset
+from rfdetr.datasets.yolo import YOLODataset
 from rfdetr.util.coco_classes import COCO_CLASSES
 
 logger = getLogger(__name__)
@@ -49,7 +49,10 @@ class RFDETR:
         self.model.export(**kwargs)
 
     def train_from_config(self, config: TrainConfig, **kwargs):
-        if is_valid_yolo_dataset(config.dataset_dir):
+        if YOLODataset.is_valid_dataset(
+            dataset_directory_path=config.dataset_dir,
+            data_yaml_filename=YOLODataset.DEFAULT_YOLO_YAML_FILENAME,
+        ):
             logger.info(f"Using native YOLO dataloader for dataset: {config.dataset_dir}")
             
             data_yaml_path = os.path.join(config.dataset_dir, "data.yaml")
