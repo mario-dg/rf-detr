@@ -104,8 +104,9 @@ class RFDETR:
             
             data_yaml_path = os.path.join(config.dataset_dir, "data.yaml")
             data = read_yaml_file(data_yaml_path)
-            num_classes = len(data['names'])
-
+            class_names = data['names']
+            num_classes = len(class_names)
+        
             # We need to update these, to ensure the training pipeline can continue the same way
             # as if we were using the native COCO dataloader
             kwargs['dataset_file'] = 'yolo'
