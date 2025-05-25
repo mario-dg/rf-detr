@@ -112,7 +112,7 @@ class YOLODataset(torch.utils.data.Dataset):
         dataset_directory_path: Union[str, Path],
         data_yaml_filename: str,
         split_dirs: Optional[List[str]] = None,
-    ):
+    ) -> bool:
         """
         Validate that the specified directory follows the expected YOLO dataset structure.
 
@@ -127,7 +127,7 @@ class YOLODataset(torch.utils.data.Dataset):
             split_dirs (Optional[List[str]]): List of split directories to check (e.g., ['train', 'valid']).
 
         Returns:
-            None. Prints warnings if the structure is invalid.
+            bool: True if the dataset structure is valid, False otherwise.
         """
         if isinstance(dataset_directory_path, str):
             dataset_directory_path = Path(dataset_directory_path)
@@ -135,6 +135,7 @@ class YOLODataset(torch.utils.data.Dataset):
         data_yaml_path = dataset_directory_path / data_yaml_filename
         if not data_yaml_path.exists():
             print(f"Missing {data_yaml_filename} in {dataset_directory_path}")
+            return False
 
         if split_dirs is None:
             split_dirs = YOLODataset.DEFAULT_SPLIT_DIRS
@@ -143,10 +144,14 @@ class YOLODataset(torch.utils.data.Dataset):
             split_dir_path = dataset_directory_path / split_dir
             if not split_dir_path.exists():
                 print(f"Missing {split_dir} directory in {dataset_directory_path}")
+                return False
 
             for data_subdir in YOLODataset.REQUIRED_DATA_SUBDIRS:
                 if not (split_dir_path / data_subdir).exists():
                     print(f"Missing {data_subdir} directory in {split_dir_path}")
+                    return False
+        
+        return True
 
     @staticmethod
     def _match_image_label_pairs(
@@ -562,7 +567,7 @@ def _dev():
     Development function to test the YOLODataset class.
     """
     from os import environ
-    
+
     dataset_dir = environ.get('COCO2017_YOLO_DIR')
     dataset = build_yolo(
         image_set="train",
